@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import Piece from '../Piece';
 import SpeechRecognition, {
   useSpeechRecognition,
 } from 'react-speech-recognition';
+import Chess from 'chess.js';
 
 const Square = styled.div`
   display: flex;
@@ -27,7 +28,7 @@ const Row = styled.div`
 
 const alphabet = 'abcdefgh';
 
-const initialFEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq e3 0 1';
+const initialFEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
 function convert(str, p1, offset, s) {
   return '_'.repeat(str);
@@ -38,12 +39,29 @@ const FENtoGrid = (fenString) => {
   return position.map((el) => el.replace(new RegExp('[0-9]', 'g'), convert));
 };
 
-const coordToPos = (i, j) => alphabet[i] + (8 - j);
+const coordToPos = (i, j) => alphabet[j] + (8 - i);
+
+const game = new Chess(initialFEN);
 
 const Game = () => {
   const [pos, setPos] = useState(FENtoGrid(initialFEN));
   const [selected, setSelected] = useState('');
   const { transcript, resetTranscript } = useSpeechRecognition();
+
+  useEffect(() => {
+    if (transcript) {
+      console.log('transcript', transcript);
+      if (transcript.includes(' ')) {
+        const from = transcript.replace('age', 'h').split(' ')[0].toLowerCase();
+
+        const to = transcript.replace('age', 'h').split(' ')[1].toLowerCase();
+        if (game.move({ from, to }) !== null) {
+          setPos(FENtoGrid(game.fen()));
+          SpeechRecognition.stopListening();
+        }
+      }
+    }
+  }, [transcript]);
 
   if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
     return null;
@@ -65,22 +83,21 @@ const Game = () => {
                     if (selected === '') {
                       setSelected(coordToPos(i, j));
                     } else {
-                      let newPos = pos;
-                      const x = alphabet.indexOf(selected.charAt(0));
-                      const y = parseInt(8 - selected.charAt(1));
+                      const y = alphabet.indexOf(selected.charAt(0));
+                      const x = parseInt(8 - selected.charAt(1));
 
-                      newPos[i] =
-                        newPos[i].substring(0, j) +
-                        pos[x].charAt(y) +
-                        newPos[i].substring(j + 1);
+                      console.log(coordToPos(x, y) + coordToPos(i, j));
+                      if (
+                        game.move({
+                          from: coordToPos(x, y),
+                          to: coordToPos(i, j),
+                        }) !== null
+                      ) {
+                        console.log('fen', game.fen());
+                        setPos(FENtoGrid(game.fen()));
 
-                      newPos[x] =
-                        newPos[x].substring(0, y) +
-                        '_' +
-                        newPos[x].substring(y + 1);
-
-                      setPos(newPos);
-                      setSelected('');
+                        setSelected('');
+                      }
                     }
                   }
                 }}
@@ -97,10 +114,16 @@ const Game = () => {
       </Board>
 
       <div>
-        <button onClick={SpeechRecognition.startListening}>Start</button>
+        <button
+          onClick={() =>
+            SpeechRecognition.startListening({ language: 'de-DE' })
+          }
+        >
+          Start
+        </button>
         <button onClick={SpeechRecognition.stopListening}>Stop</button>
         <button onClick={resetTranscript}>Reset</button>
-        <p>{transcript}</p>
+        <p>{transcript.replace('age', 'h')}</p>
       </div>
     </>
   );
